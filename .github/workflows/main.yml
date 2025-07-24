@@ -13,12 +13,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run OWASP Dependency-Check
-        uses: dependency-check/dependency-check-action@v1.4.1
+      - name: Run OWASP Dependency-Check via Docker
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v $(pwd):/src \
+            -v $(pwd)/reports:/report \
+            owasp/dependency-check \
+            --project "Simple-HTTP-App" \
+            --scan /src \
+            --format "HTML" \
+            --out /report
+
+      - name: Upload Dependency-Check Report
+        uses: actions/upload-artifact@v4
         with:
-          project: 'Simple-HTTP-App'
-          scanPath: '/github/workspace'
-          format: 'HTML'
+          name: dependency-check-report
+          path: reports/
 
       - name: Build and run docker-compose
         run: docker-compose up -d --build
@@ -33,7 +44,6 @@ jobs:
             echo "Image not found for Trivy scan"
             exit 1
           fi
-          echo "Scanning image: $IMAGE_ID"
           trivy image \
             --format table \
             --exit-code 0 \
@@ -44,7 +54,7 @@ jobs:
 
       - name: Verify application
         run: |
-          echo "Waiting for app to start..."
+          echo "Waiting for app..."
           sleep 10
           curl -f http://localhost:8080 | grep -i "hello world"
 
