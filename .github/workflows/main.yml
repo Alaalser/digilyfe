@@ -13,12 +13,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Run OWASP Dependency-Check
-        uses: OWASP/Dependency-Check-Action@main
+      - name: Run OWASP Dependency-Check via Docker
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v $(pwd):/src \
+            -v $(pwd)/reports:/report \
+            owasp/dependency-check \
+            --project "Simple-HTTP-App" \
+            --scan /src \
+            --format "HTML" \
+            --out /report
+
+      - name: Upload Dependency-Check Report
+        uses: actions/upload-artifact@v3
         with:
-          project: 'Simple-HTTP-App'
-          path: '.'
-          format: 'HTML'
+          name: dependency-check-report
+          path: reports/dependency-check-report.html
 
       - name: Build and run docker-compose
         run: docker-compose up -d --build
