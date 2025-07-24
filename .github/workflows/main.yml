@@ -11,194 +11,43 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4  # Updated to v4
+        uses: actions/checkout@v2
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Cache dependency-check database to speed up runs
-      - name: Cache OWASP Dependency-Check database
-        uses: actions/cache@v4
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/dependency-check-action@v1.4.1
         with:
-          path: ~/.gradle/dependency-check-data
-          key: dependency-check-${{ runner.os }}-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            dependency-check-${{ runner.os }}-
-
-      - name: Create empty suppression file if missing
-        run: |
-          if [ ! -f "dependency-check-suppressions.xml" ]; then
-            cat > dependency-check-suppressions.xml << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd"></suppressions>
-          EOF
-          fi
-
-      - name: Run OWASP Dependency-Check via Docker
-        run: |
-          mkdir -p reports
-          # Add error handling and use JSON format as fallback
-          docker run --rm             -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }}             -v $(pwd):/src             -v $(pwd)/reports:/report             -e user=$USER
-            owasp/dependency-check 
-            --project "Simple-HTTP-App" 
-            --scan /src 
-            --format "HTML" 
-            --format "JSON" 
-            --out /report 
-            --suppression /src/dependency-check-suppressions.xml 
-            --enableRetired 
-            --enableExperimental || {
-            echo "HTML report failed, trying with basic settings..."
-            docker run --rm 
-              -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }} 
-              -v $(pwd):/src 
-              -v $(pwd)/reports:/report 
-              owasp/dependency-check 
-              --project "Simple-HTTP-App" 
-              --scan /src 
-              --format "JSON" 
-              --out /report
-          }
-
-      # Check if report was generated successfully
-      - name: Verify Dependency-Check Report
-        run: |
-          if [ -f "reports/dependency-check-report.html" ]; then
-            echo "HTML report generated successfully"
-            ls -la reports/
-          elif [ -f "reports/dependency-check-report.json" ]; then
-            echo "JSON report generated successfully"
-            ls -la reports/
-          else
-            echo "No report found, listing all files in reports directory:"
-            ls -la reports/ || echo "Reports directory doesn't exist"
-            exit 1
-          fi
-
-      - name: Upload Dependency-Check Report
-        uses: actions/upload-artifact@v4
-        if: always()  # Upload even if previous steps failed
-        with:
-          name: dependency-check-report
-          path: reports/
-          retention-days: 30
-
-      # Add step to create docker-compose.yml if it doesn't exist
-      - name: Create docker-compose.yml if missing
-        run: |
-          if [ ! -f "docker-compose.yml" ]; then
-            echo "Creating docker-compose.yml..."
-            cat > docker-compose.yml << 'EOF'
-          version: '3.8'
-          services:
-            web:
-              build: .
-              ports:
-                - "8080:8080"
-              environment:
-                - NODE_ENV=production
-          EOF
-          fi
+          project: 'Simple-HTTP-App'
+          scanPath: '/github/workspace'
+          format: 'HTML'
 
       - name: Build and run docker-compose
-        run: |
-          # Check if Dockerfile exists
-          if [ ! -f "Dockerfile" ]; then
-            echo "Creating basic Dockerfile..."
-            cat > Dockerfile << 'EOF'
-          FROM node:18-alpine
-          WORKDIR /app
-          COPY package*.json ./
-          RUN npm install --production
-          COPY . .
-          EXPOSE 8080
-          CMD ["node", "server.js"]
-          EOF
-          fi
-          
-          docker compose up -d --build
-          
-          # Wait for container to be ready
-          timeout=60
-          while [ $timeout -gt 0 ]; do
-            if docker compose ps | grep -q "Up"; then
-              echo "Container is running"
-              break
-            fi
-            echo "Waiting for container to start... ($timeout seconds remaining)"
-            sleep 5
-            timeout=$((timeout-5))
-          done
-
-      # Use setup-trivy action for better reliability
-      - name: Setup Trivy
-        uses: aquasecurity/setup-trivy@v0.2.0
+        run: docker-compose up -d --build
 
       - name: Run Trivy vulnerability scanner
-        run: |
-          # Get the actual image name from docker-compose
-          IMAGE_NAME=$(docker compose images -q web)
-          if [ -z "$IMAGE_NAME" ]; then
-            IMAGE_NAME="simple-http-app_web"
-          fi
-          
-          echo "Scanning image: $IMAGE_NAME"
-          trivy image \
-            --format table \
-            --exit-code 0 \
-            --ignore-unfixed \
-            --vuln-type os,library \
-            --severity CRITICAL,HIGH \
-            "$IMAGE_NAME" || {
-            echo "Trivy scan completed with vulnerabilities found"
-            exit 0  # Don't fail the build for vulnerabilities in this example
-          }
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'docker.io/library/simple-http-app_web'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: 'true'
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
       - name: Verify application
         run: |
-          echo "Waiting for application to be ready..."
-          sleep 10
-          
-          # Test if the application is responding
-          max_attempts=12
-          attempt=1
-          
-          while [ $attempt -le $max_attempts ]; do
-            echo "Attempt $attempt of $max_attempts..."
-            
-            if curl -f -s http://localhost:8080; then
-              echo "Application is responding!"
-              break
-            elif [ $attempt -eq $max_attempts ]; then
-              echo "Application failed to respond after $max_attempts attempts"
-              echo "Container logs:"
-              docker compose logs
-              exit 1
-            else
-              echo "Application not ready yet, waiting 5 seconds..."
-              sleep 5
-              attempt=$((attempt + 1))
-            fi
-          done
-
-      # Cleanup
-      - name: Cleanup
-        if: always()
-        run: |
-          docker compose down || true
-          docker system prune -f || true
+          sleep 5 # Give the container time to start
+          curl http://localhost:8080 | grep "hello world"
 
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4  # Updated to v4
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -206,27 +55,18 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2  # Updated to v2
+        uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build, tag, and push image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: simple-http-app
+          IMAGE_TAG: latest
         run: |
-          # Build the Docker image
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          
-          # Push both tags
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Deploy to ECS
-        env:
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Make deploy script executable
           chmod +x deploy.sh
-          
-          # Run deployment script
-          ./deploy.sh $IMAGE_TAG
+          ./deploy.sh
