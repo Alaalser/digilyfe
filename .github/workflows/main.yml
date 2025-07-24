@@ -16,6 +16,9 @@ jobs:
       - name: Build and run Docker Compose
         run: docker-compose up -d --build
 
+      - name: Build and run Docker Compose
+        run: docker-compose up -d --build
+
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@v0.2.0
 
