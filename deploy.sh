@@ -12,8 +12,8 @@ IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 ECS_EXECUTION_ROLE_ARN=${ECS_EXECUTION_ROLE_ARN:-arn:aws:iam::067632295431:role/ecsTaskExecutionRole} # Replace with your actual ECS Task Execution Role ARN
 
 # Network configuration (must be passed in or set in GitHub Actions)
-SUBNET_ID=${SUBNET_ID:-subnet-xxxxxxxx} # Replace with your actual subnet ID
-SECURITY_GROUP_ID=${SECURITY_GROUP_ID:-sg-xxxxxxxx} # Replace with your actual security group ID
+SUBNET_ID=${SUBNET_ID:?Error: SUBNET_ID not set. Please provide your actual subnet ID.}
+SECURITY_GROUP_ID=${SECURITY_GROUP_ID:?Error: SECURITY_GROUP_ID not set. Please provide your actual security group ID.}
 
 echo "Using image: $IMAGE"
 
