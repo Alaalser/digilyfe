@@ -8,6 +8,9 @@ ECR_REPOSITORY=simple-http-app
 IMAGE_TAG=latest
 IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
+# ECS Task Execution Role ARN (must be passed in or set in GitHub Actions)
+ECS_EXECUTION_ROLE_ARN=${ECS_EXECUTION_ROLE_ARN:-arn:aws:iam::067632295431:role/ecsTaskExecutionRole} # Replace with your actual ECS Task Execution Role ARN
+
 # Network configuration (must be passed in or set in GitHub Actions)
 SUBNET_ID=${SUBNET_ID:-subnet-xxxxxxxx} # Replace with your actual subnet ID
 SECURITY_GROUP_ID=${SECURITY_GROUP_ID:-sg-xxxxxxxx} # Replace with your actual security group ID
@@ -25,6 +28,7 @@ cat > task-definition.json <<EOF
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
   "containerDefinitions": [
     {
       "name": "simple-http-app-container",
