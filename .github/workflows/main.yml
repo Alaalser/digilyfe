@@ -27,16 +27,18 @@ jobs:
 
       - name: Create empty suppression file if missing
         run: |
-          touch dependency-check-suppressions.xml
+          if [ ! -f "dependency-check-suppressions.xml" ]; then
+            cat > dependency-check-suppressions.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.4.xsd"></suppressions>
+          EOF
+          fi
 
       - name: Run OWASP Dependency-Check via Docker
         run: |
           mkdir -p reports
           # Add error handling and use JSON format as fallback
-          docker run --rm \
-            -v $(pwd):/src \
-            -v $(pwd)/reports:/report \
-            -e user=$USER \
+          docker run --rm             -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }}             -v $(pwd):/src             -v $(pwd)/reports:/report             -e user=$USER
             owasp/dependency-check \
             --project "Simple-HTTP-App" \
             --scan /src \
@@ -48,6 +50,7 @@ jobs:
             --enableExperimental || {
             echo "HTML report failed, trying with basic settings..."
             docker run --rm \
+              -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }} \
               -v $(pwd):/src \
               -v $(pwd)/reports:/report \
               owasp/dependency-check \
