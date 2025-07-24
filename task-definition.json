@@ -1,5 +1,7 @@
 {
     "family": "simple-http-app",
+    "executionRoleArn": "arn:aws:iam::067632295431:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::067632295431:role/ecsTaskRole",
     "networkMode": "awsvpc",
     "containerDefinitions": [
         {
