@@ -25,6 +25,10 @@ jobs:
           restore-keys: |
             dependency-check-${{ runner.os }}-
 
+      - name: Create empty suppression file if missing
+        run: |
+          touch dependency-check-suppressions.xml
+
       - name: Run OWASP Dependency-Check via Docker
         run: |
           mkdir -p reports
