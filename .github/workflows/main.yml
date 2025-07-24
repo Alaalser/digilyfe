@@ -39,24 +39,24 @@ jobs:
           mkdir -p reports
           # Add error handling and use JSON format as fallback
           docker run --rm             -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }}             -v $(pwd):/src             -v $(pwd)/reports:/report             -e user=$USER
-            owasp/dependency-check \
-            --project "Simple-HTTP-App" \
-            --scan /src \
-            --format "HTML" \
-            --format "JSON" \
-            --out /report \
-            --suppression /src/dependency-check-suppressions.xml \
-            --enableRetired \
+            owasp/dependency-check 
+            --project "Simple-HTTP-App" 
+            --scan /src 
+            --format "HTML" 
+            --format "JSON" 
+            --out /report 
+            --suppression /src/dependency-check-suppressions.xml 
+            --enableRetired 
             --enableExperimental || {
             echo "HTML report failed, trying with basic settings..."
-            docker run --rm \
-              -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }} \
-              -v $(pwd):/src \
-              -v $(pwd)/reports:/report \
-              owasp/dependency-check \
-              --project "Simple-HTTP-App" \
-              --scan /src \
-              --format "JSON" \
+            docker run --rm 
+              -e DC_NVD_API_KEY=${{ secrets.NVD_API_KEY }} 
+              -v $(pwd):/src 
+              -v $(pwd)/reports:/report 
+              owasp/dependency-check 
+              --project "Simple-HTTP-App" 
+              --scan /src 
+              --format "JSON" 
               --out /report
           }
 
