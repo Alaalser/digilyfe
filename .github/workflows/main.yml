@@ -13,6 +13,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4  # Updated to v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       # Cache dependency-check database to speed up runs
       - name: Cache OWASP Dependency-Check database
         uses: actions/cache@v4
@@ -106,12 +109,12 @@ jobs:
           EOF
           fi
           
-          docker-compose up -d --build
+          docker compose up -d --build
           
           # Wait for container to be ready
           timeout=60
           while [ $timeout -gt 0 ]; do
-            if docker-compose ps | grep -q "Up"; then
+            if docker compose ps | grep -q "Up"; then
               echo "Container is running"
               break
             fi
@@ -127,7 +130,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         run: |
           # Get the actual image name from docker-compose
-          IMAGE_NAME=$(docker-compose images -q web)
+          IMAGE_NAME=$(docker compose images -q web)
           if [ -z "$IMAGE_NAME" ]; then
             IMAGE_NAME="simple-http-app_web"
           fi
@@ -162,7 +165,7 @@ jobs:
             elif [ $attempt -eq $max_attempts ]; then
               echo "Application failed to respond after $max_attempts attempts"
               echo "Container logs:"
-              docker-compose logs
+              docker compose logs
               exit 1
             else
               echo "Application not ready yet, waiting 5 seconds..."
@@ -175,7 +178,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker-compose down || true
+          docker compose down || true
           docker system prune -f || true
 
   deploy:
