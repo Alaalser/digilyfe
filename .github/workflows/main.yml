@@ -90,6 +90,10 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Deploy to ECS
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: simple-http-app
+          IMAGE_TAG: latest
         run: |
           chmod +x deploy.sh
           ./deploy.sh
