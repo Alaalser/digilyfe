@@ -28,14 +28,19 @@ jobs:
             --vuln-type library \
             app/
 
-      - name: Scan Docker image with Trivy
+      - name: Get Docker image ID
+        id: get-image
         run: |
-          IMAGE_ID=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep 'simple-http-app_web' || true)
+          IMAGE_ID=$(docker compose images -q web)
           if [ -z "$IMAGE_ID" ]; then
-            echo "Image not found for Trivy scan"
+            echo "No image found for service web"
             exit 1
           fi
+          echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
 
+      - name: Run Trivy scan
+        run: |
+          echo "Scanning image: $IMAGE_ID"
           trivy image \
             --format table \
             --exit-code 0 \
