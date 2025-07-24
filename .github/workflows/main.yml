@@ -96,4 +96,7 @@ jobs:
           IMAGE_TAG: latest
         run: |
           chmod +x deploy.sh
+          ECS_EXECUTION_ROLE_ARN="${{ secrets.ECS_EXECUTION_ROLE_ARN }}" \
+          SUBNET_ID="${{ secrets.SUBNET_ID }}" \
+          SECURITY_GROUP_ID="${{ secrets.SECURITY_GROUP_ID }}" \
           ./deploy.sh
