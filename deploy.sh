@@ -8,6 +8,10 @@ ECR_REPOSITORY=simple-http-app
 IMAGE_TAG=latest
 IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
+# Network configuration (must be passed in or set in GitHub Actions)
+SUBNET_ID=${SUBNET_ID:-subnet-xxxxxxxx} # Replace with your actual subnet ID
+SECURITY_GROUP_ID=${SECURITY_GROUP_ID:-sg-xxxxxxxx} # Replace with your actual security group ID
+
 echo "Using image: $IMAGE"
 
 # Create ECS cluster (idempotent)
@@ -40,11 +44,26 @@ EOF
 echo "Registering task definition..."
 aws ecs register-task-definition --cli-input-json file://task-definition.json
 
-echo "Creating ECS service..."
-aws ecs create-service \
-  --cluster simple-http-app-cluster \
-  --service-name simple-http-app-service \
-  --task-definition simple-http-app \
-  --desired-count 1 \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxxxx],securityGroups=[sg-xxxxxxxx],assignPublicIp=ENABLED}"
+echo "Creating/Updating ECS service..."
+
+# Check if service exists
+SERVICE_EXISTS=$(aws ecs describe-services --cluster simple-http-app-cluster --services simple-http-app-service --query 'services[0].status' --output text 2>/dev/null || true)
+
+if [ "$SERVICE_EXISTS" == "ACTIVE" ]; then
+  echo "Service simple-http-app-service already exists. Updating..."
+  aws ecs update-service \
+    --cluster simple-http-app-cluster \
+    --service simple-http-app-service \
+    --task-definition simple-http-app \
+    --desired-count 1 \
+    --force-new-deployment
+else
+  echo "Service simple-http-app-service does not exist. Creating..."
+  aws ecs create-service \
+    --cluster simple-http-app-cluster \
+    --service-name simple-http-app-service \
+    --task-definition simple-http-app \
+    --desired-count 1 \
+    --launch-type FARGATE \
+    --network-configuration "awsvpcConfiguration={subnets=[${SUBNET_ID}],securityGroups=[${SECURITY_GROUP_ID}],assignPublicIp=ENABLED}"
+fi
