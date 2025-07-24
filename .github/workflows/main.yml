@@ -13,37 +13,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run OWASP Dependency-Check via Docker
-        run: |
-          mkdir -p reports
-          docker run --rm \
-            -v $(pwd):/src \
-            -v $(pwd)/reports:/report \
-            owasp/dependency-check \
-            --project "Simple-HTTP-App" \
-            --scan /src \
-            --format "HTML" \
-            --out /report
-
-      - name: Upload Dependency-Check Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: reports/
-
-      - name: Build and run docker-compose
+      - name: Build and run Docker Compose
         run: docker-compose up -d --build
 
       - name: Install Trivy
         uses: aquasecurity/setup-trivy@v0.2.0
 
-      - name: Run Trivy vulnerability scanner
+      - name: Scan Python dependencies with Trivy (requirements.txt)
+        run: |
+          trivy fs \
+            --exit-code 0 \
+            --severity CRITICAL,HIGH \
+            --vuln-type library \
+            app/
+
+      - name: Scan Docker image with Trivy
         run: |
           IMAGE_ID=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep 'simple-http-app_web' || true)
           if [ -z "$IMAGE_ID" ]; then
             echo "Image not found for Trivy scan"
             exit 1
           fi
+
           trivy image \
             --format table \
             --exit-code 0 \
@@ -52,9 +43,9 @@ jobs:
             --severity CRITICAL,HIGH \
             "$IMAGE_ID"
 
-      - name: Verify application
+      - name: Verify application is running
         run: |
-          echo "Waiting for app..."
+          echo "Waiting for app to start..."
           sleep 10
           curl -f http://localhost:8080 | grep -i "hello world"
 
@@ -62,7 +53,7 @@ jobs:
         if: always()
         run: |
           docker-compose down || true
-          docker system prune -f || true
+          docker system prune -f -a --volumes -y || true
 
   deploy:
     needs: build-and-test
@@ -83,7 +74,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Build, tag, and push Docker image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: simple-http-app
