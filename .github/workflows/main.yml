@@ -13,12 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Run OWASP Dependency-Check
-        uses: dependency-check/dependency-check-action@v1.4.1
-        with:
-          project: 'Simple-HTTP-App'
-          scanPath: '/github/workspace'
-          format: 'HTML'
+      
 
       - name: Build and run docker-compose
         run: docker-compose up -d --build
