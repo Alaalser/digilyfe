@@ -16,18 +16,6 @@ jobs:
       - name: Build and run Docker Compose
         run: docker compose up -d --build
 
-
-      - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.2.0
-
-      - name: Scan Python dependencies with Trivy (requirements.txt)
-        run: |
-          trivy fs \
-            --exit-code 0 \
-            --severity CRITICAL,HIGH \
-            --vuln-type library \
-            app/
-
       - name: Get Docker image ID
         id: get-image
         run: |
@@ -39,15 +27,14 @@ jobs:
           echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
 
       - name: Run Trivy scan
-        run: |
-          echo "Scanning image: $IMAGE_ID"
-          trivy image \
-            --format table \
-            --exit-code 0 \
-            --ignore-unfixed \
-            --vuln-type os,library \
-            --severity CRITICAL,HIGH \
-            "$IMAGE_ID"
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_ID }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
       - name: Verify application is running
         run: |
@@ -59,7 +46,6 @@ jobs:
         if: always()
         run: |
           docker-compose down || true
-          docker system prune -f -a --volumes -y || true
 
   deploy:
     needs: build-and-test
@@ -80,14 +66,32 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push Docker image to Amazon ECR
+      - name: Build and tag Docker image
+        id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: simple-http-app
-          IMAGE_TAG: latest
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image_uri_sha=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_uri_latest=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> $GITHUB_OUTPUT
+
+      - name: Scan image for vulnerabilities with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-image.outputs.image_uri_sha }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Docker image to Amazon ECR
+        run: |
+          docker push ${{ steps.build-image.outputs.image_uri_sha }}
+          docker push ${{ steps.build-image.outputs.image_uri_latest }}
 
       - name: Deploy to ECS
         env:
