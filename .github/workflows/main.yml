@@ -22,7 +22,7 @@ jobs:
           fail-on-cvss: '7'
 
       - name: Upload Dependency-Check Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always() # Always upload the report, even if the scan fails
         with:
           name: dependency-check-report
