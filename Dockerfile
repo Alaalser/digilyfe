@@ -2,7 +2,7 @@ FROM python:3.11-bullseye
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y curl
+RUN apt-get update && apt-get upgrade -y && apt-get install -y curl
 
 COPY ./app/requirements.txt .
 
